@@ -1,0 +1,129 @@
+---
+title: "Reproducible Research: Peer Assessment 1"
+author: created by Orlov Andrey (a.k.a @lokaro)
+output: 
+  html_document:
+    keep_md: true
+---
+
+
+## Loading and preprocessing the data
+First of all, we will load data by using `read.csv(...)` and translate string of format **2012-10-01** to date
+```{r read}
+data = read.csv(file = "activity.csv", header = TRUE, sep = ",")
+data$date <- as.Date(data$date, "%Y-%m-%d")
+```
+Also, let's check `str` of our dataset
+``` {r str}
+str(data)
+```
+
+## What is mean total number of steps taken per day?
+``` {r loadPackages, echo = FALSE}
+library(ggplot2)
+library(lattice)
+```
+
+Now, we should prepare data and aggregate all steps per date and build graphs:
+``` {r stepperday, echo = FALSE}
+stepPerDay <- tapply(data$steps, data$date, sum, na.rm = TRUE)
+qplot(unique(data$date), stepPerDay, geom = c("line"), xlab = "Dates", ylab = "Steps per day")
+```
+
+We can see, that there are days without activity or it's very small!
+
+Let's calculate mean of steps taken per day
+``` {r means}
+meanRes <- as.integer(mean(stepPerDay))
+medianRes <- as.integer(median(stepPerDay))
+```
+
+The result is:
+
+* Mean = `r meanRes`
+* Median = `r medianRes`
+
+## What is the average daily activity pattern?
+
+Let's check activity through intervals. Here we will create sequence `intervals` for correct chart. If we get data **as is**, we will have error, because intervals have breaks between xx55 and xx00. 
+``` {r intervals}
+stepPerIntervals <- tapply(data$steps, data$interval, mean, na.rm = TRUE)
+intervals <- seq(1,288)
+```
+
+And draw it!
+``` {r drawintervals, echo = FALSE}
+qplot(intervals, stepPerIntervals, geom = c("line"), xlab = "Interval", ylab = "Steps per interval")
+```
+
+```{r maxinterval}
+maxInterval <- which.max(stepPerIntervals)
+intervalValue <- names(stepPerIntervals[maxInterval])
+stringIntervalValue <- ""
+if (nchar(intervalValue) == 3) {
+  stringIntervalValue <- paste(substr(intervalValue, 1,1), substr(intervalValue, 2,3), sep = ":")
+} else {
+  stringIntervalValue <- paste(substr(intervalValue, 1,2), substr(intervalValue, 3,4), sep = ":")
+}
+```
+
+Here we can see, that peek of activity is in the morning. And maximum activity is in `r stringIntervalValue`
+
+
+## Imputing missing values
+Now, let's calculate all NAs values in dataset.
+``` {r nascalculation}
+nas <- length(which(is.na(data$steps)))
+```
+
+Number of missing values is **`r nas`**.
+Now, we are going to fill all this NAs values by mean values for this interval from previous step.
+``` {r filldata}
+newSteps <- numeric()
+intervals <- unique(data$interval)
+for (i in 1:nrow(data)) {
+    tmp <- data[i, ]
+    if (is.na(tmp$steps)) {
+        index <- match(tmp$interval, intervals)
+        steps <- stepPerIntervals[[index]]
+    } else {
+        steps <- tmp$steps
+    }
+    newSteps <- c(newSteps, steps)
+}
+newData <- data
+newData$steps <- newSteps
+```
+
+And now we build new chart and calculate new **mean** and **median**
+
+``` {r newstepperday, echo = FALSE}
+newStepPerDay <- tapply(newData$steps, newData$date, sum, na.rm = TRUE)
+qplot(unique(newData$date), newStepPerDay, geom = c("line"), xlab = "Dates", ylab = "New steps per day")
+```
+
+``` {r newmeans}
+newmeanRes <- as.integer(mean(newStepPerDay))
+newmedianRes <- as.integer(median(newStepPerDay))
+```
+
+The new results are:
+
+* Mean = `r newmeanRes`
+* Median = `r newmedianRes`
+
+
+## Are there differences in activity patterns between weekdays and weekends?
+In the end, we will build new factor, which we added to our data frame and draw a chart.
+``` {r buildfactor}
+weekends <- ifelse (weekdays(newData$date) %in% c('Saturday', 'Sunday'),  "weekend", "weekday")
+newData[, "day"] <- weekends
+aggregateNewData <- aggregate(steps ~ interval + day, data=newData, mean)
+g <- ggplot(aggregateNewData, aes(interval, steps))
+g + geom_line() + facet_grid(day ~ .) + xlab("Intervals per 5 min") + ylab("Number of steps")
+```
+
+
+
+
+
